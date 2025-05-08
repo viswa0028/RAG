@@ -1,64 +1,88 @@
-import langchain
-import tiktoken
-import numpy as np
+from operator import itemgetter
 import os
-from langchain_google_genai import ChatGoogleGenerativeAI
-# from PyQt5.QtWebEngineWidgets import kwargs
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+import numpy as np
+import tiktoken
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_core.output_parsers import StrOutputParser
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain.prompts import ChatPromptTemplate
-from sympy.physics.units import temperature
+from langchain.load import loads, dumps
+from langchain_community.document_loaders import PyPDFLoader
 
 if "GOOGLE_API_KEY" not in os.environ:
     os.environ["GOOGLE_API_KEY"] = input("Enter your Google API key: ")
 
-question = 'What is dog?'
-document = 'Dog is an animal found in the world'
+loader = PyPDFLoader("./X Physics EM Title.pdf")
+documents = loader.load()
 
-# Token count helper (optional)
-def num_tokens_from_string(text, encoding_name):
-    encoding = tiktoken.get_encoding(encoding_name)
-    return len(encoding.encode(text))
+splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
+split_docs = splitter.split_documents(documents)
 
-# Embeddings
 embed = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-query_result = embed.embed_query(question)
-doc_result = embed.embed_query(document)
+vector_store = Chroma.from_documents(split_docs, embedding=embed)
 
-# Cosine similarity
-def cosine_similarity(vec1, vec2):
-    dot_prdt = np.dot(vec1, vec2)
-    norm1 = np.linalg.norm(vec1)
-    norm2 = np.linalg.norm(vec2)
-    return dot_prdt / (norm1 * norm2)
+#Retrieve based on question
+question = 'What is reflection?'
+retriever = vector_store.as_retriever(search_kwargs={'k': 3})
 
-print("Cosine Similarity:", cosine_similarity(query_result, doc_result))
+#Generate search variations using Gemini
+prompt_template = """You are a helpful assistant that generates multiple search queries based on a single query input.
 
-#loading docs
-# #load docs
-#splitting text
-text_splitting = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-    chunk_size = 300,
-    chunk_overlap = 50
+Generate multiple search queries related to: {question}
+
+Output (4 queries):"""
+prompt = ChatPromptTemplate.from_template(prompt_template)
+
+generate_queries = (
+    prompt
+    | ChatGoogleGenerativeAI(model = 'gemini-2.0-flash',temperature=0)
+    | StrOutputParser()
+    | (lambda x: x.split("\n"))
 )
 
-vector_store = Chroma.from_documents(document ,embedding=embed) #document should be the documents that are loaded
+#RAG Fusion
+def rag_fusion(results: list[list], k=60):
+    fused_score = {}
+    for docs in results:
+        for rank, doc in enumerate(docs):
+            doc_str = dumps(doc)
+            if doc_str not in fused_score:
+                fused_score[doc_str] = 0
+            fused_score[doc_str] += 1 / (rank + k)
+    reranked_results = [
+        (loads(doc), score)
+        for doc, score in sorted(fused_score.items(), key=lambda x: x[1], reverse=True)
+    ]
+    return [doc for doc, _ in reranked_results]
 
-##Retreival
+retrieval_rag_fusion = generate_queries | retriever.map() | rag_fusion
 
-retriever = vector_store.as_retriever(search_kwargs ={'k':3})
-docs= retriever.get_relevant_documents(question)
-## docs will produce the output for our question
+#retrieval
+retrieved_docs = retrieval_rag_fusion.invoke({"question": question})
 
-# ###Generation
+# Final Answer
+llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash', temperature=0.7)
 
-template = """Answer the question based on the context:{context}
-Question :{question}
-"""
-prompt = ChatPromptTemplate.from_template(template)
+final_prompt = ChatPromptTemplate.from_template(
+    "Answer the question based on the context below:\n\nContext:\n{context}\n\nQuestion: {question}"
+)
 
-llm= ChatGoogleGenerativeAI(model = 'gemini-pro',temperature=0.7)
-chain = llm | prompt
-chain.invoke({"context": document, "question": question})
+final_chain = (
+    {
+        "context": lambda x: "\n".join(doc.page_content for doc in retrieved_docs),
+        "question": itemgetter("question")
+    }
+    | final_prompt
+    | llm
+    | StrOutputParser()
+)
+
+answer = final_chain.invoke({"question": question})
+print("\n Final Answer:\n", answer)
+
+# Retrieved raw data
+print("\n📄 Retrieved Context Chunks:")
+for i, doc in enumerate(retrieved_docs):
+    print(f"\n--- Chunk {i+1} ---\n{doc.page_content}\n")
 
