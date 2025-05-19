@@ -80,9 +80,7 @@ final_chain = (
 
 answer = final_chain.invoke({"question": question})
 print("\n Final Answer:\n", answer)
-
 # Retrieved raw data
 print("\n📄 Retrieved Context Chunks:")
 for i, doc in enumerate(retrieved_docs):
     print(f"\n--- Chunk {i+1} ---\n{doc.page_content}\n")
-
