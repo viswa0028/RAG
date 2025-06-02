@@ -8,9 +8,9 @@ from langchain_community.vectorstores import Chroma
 from langchain_neo4j import GraphCypherQAChain, Neo4jGraph
 
 # Neo4j connection setup
-NEO4J_URI = "bolt://localhost:7687"
-NEO4J_USERNAME = "neo4j"
-NEO4J_PASSWORD = "graphdbms"
+NEO4J_URI = "YOUR BOLT URL"
+NEO4J_USERNAME = "YOUR USERNAME"
+NEO4J_PASSWORD = "YOUR PASSWORD"
 
 # Initialize Neo4j graph
 graph = Neo4jGraph(
