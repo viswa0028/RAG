@@ -25,7 +25,7 @@ Output (4 queries):"""
     prompt = ChatPromptTemplate.from_template(prompt_template)
     generate_queries = (
         prompt
-        | ChatGoogleGenerativeAI(model='gemini-2.0-flash', temperature=0, google_api_key=os.environ["GOOGLE_API_KEY"])
+        | ChatGoogleGenerativeAI(model='gemini-2.0-flash', temperature=0.3, google_api_key=os.environ["GOOGLE_API_KEY"])
         | StrOutputParser()
         | (lambda x: x.split("\n"))
     )
