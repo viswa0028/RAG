@@ -13,9 +13,9 @@ if "GOOGLE_API_KEY" not in os.environ:
     os.environ["GOOGLE_API_KEY"] = input("Enter your Google API key: ")
 
 # Neo4j connection setup
-NEO4J_URI = "bolt://localhost:7687"
-NEO4J_USERNAME = "neo4j"
-NEO4J_PASSWORD = "graphdbms"
+NEO4J_URI = "YOUR BOLT URL"
+NEO4J_USERNAME = "YOUR USERNAME"
+NEO4J_PASSWORD = "YOUR PASSWORD"
 
 # Initialize Neo4j graph
 graph = Neo4jGraph(
@@ -25,7 +25,7 @@ graph = Neo4jGraph(
 )
 
 
-def setup_data(pdf_path="./initial documentation.pdf", persist_directory="./chroma_db"):
+def setup_data(pdf_path="./YOUR PATH", persist_directory="./chroma_db"):
     # Initialize the free KG generator
     kg = FreeKGGenerator(api_key=os.environ["GOOGLE_API_KEY"])
 
